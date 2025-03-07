@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { setupAuth } from "./auth";
+import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import { storage } from "./storage";
 import { insertMessageSchema } from "@shared/schema";
 
@@ -63,6 +63,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations/:id/messages", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const messages = await storage.getMessages(parseInt(req.params.id));
+    // Mark messages as read when fetched
+    await storage.markConversationMessagesAsRead(parseInt(req.params.id), req.user!.id);
     res.json(messages);
   });
 
@@ -115,7 +117,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       switch (message.type) {
         case 'init':
           userId = message.userId;
-          clients.set(userId, { userId, ws });
+          if (userId) {
+            clients.set(userId, { userId, ws });
+          }
           break;
 
         case 'typing':
@@ -127,7 +131,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Notify the other user in the conversation
-          for (const [_, client] of clients) {
+          for (const client of clients.values()) {
             if (client.conversationId === conversationId && client.userId !== userId) {
               client.ws.send(JSON.stringify({
                 type: 'typing',

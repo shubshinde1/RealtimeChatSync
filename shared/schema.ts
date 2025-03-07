@@ -20,6 +20,7 @@ export const messages = pgTable("messages", {
   senderId: integer("sender_id").references(() => users.id).notNull(),
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
+  read: boolean("read").default(false).notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

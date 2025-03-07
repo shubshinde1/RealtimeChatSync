@@ -15,6 +15,8 @@ export interface IStorage {
   getMessages(conversationId: number): Promise<Message[]>;
   createMessage(conversationId: number, senderId: number, content: string): Promise<Message>;
   sessionStore: session.SessionStore;
+  updateMessageReadStatus(messageId: number, read: boolean): Promise<void>;
+  markConversationMessagesAsRead(conversationId: number, userId: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -82,6 +84,7 @@ export class MemStorage implements IStorage {
       senderId,
       content,
       timestamp: new Date(),
+      read: false,
     };
     this.messages.set(id, message);
     return message;
@@ -91,6 +94,21 @@ export class MemStorage implements IStorage {
     const user = this.users.get(userId);
     if (user) {
       this.users.set(userId, { ...user, password: hashedPassword });
+    }
+  }
+
+  async updateMessageReadStatus(messageId: number, read: boolean): Promise<void> {
+    const message = this.messages.get(messageId);
+    if (message) {
+      this.messages.set(messageId, { ...message, read });
+    }
+  }
+
+  async markConversationMessagesAsRead(conversationId: number, userId: number): Promise<void> {
+    for (const [id, message] of this.messages) {
+      if (message.conversationId === conversationId && message.senderId !== userId) {
+        this.messages.set(id, { ...message, read: true });
+      }
     }
   }
 }

@@ -9,7 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMessageSchema } from "@shared/schema";
-import { LogOut, Send, Loader2, MessageSquare, UserPlus, User } from "lucide-react";
+import { LogOut, Send, Loader2, MessageSquare, UserPlus, User, Menu } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -70,7 +70,15 @@ function useWebSocket() {
 export default function ChatPage() {
   const { user, logoutMutation } = useAuth();
   const [selectedConversation, setSelectedConversation] = useState<number | null>(null);
+  const [showSidebar, setShowSidebar] = useState(true);
   const { toast } = useToast();
+
+  // Close sidebar on mobile when conversation is selected
+  useEffect(() => {
+    if (window.innerWidth < 768 && selectedConversation) {
+      setShowSidebar(false);
+    }
+  }, [selectedConversation]);
 
   const { data: conversations, isLoading: conversationsLoading } = useQuery({
     queryKey: ["/api/conversations"],
@@ -99,8 +107,22 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen">
+      {/* Mobile Menu Button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden fixed top-4 left-4 z-50"
+        onClick={() => setShowSidebar(!showSidebar)}
+      >
+        <Menu className="h-4 w-4" />
+      </Button>
+
       {/* Sidebar */}
-      <div className="w-80 border-r flex flex-col">
+      <div 
+        className={`${
+          showSidebar ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0 transition-transform duration-200 fixed md:relative z-40 w-80 h-full bg-background border-r flex flex-col`}
+      >
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="font-semibold">Conversations</h2>
           <div className="flex gap-2">
@@ -121,22 +143,35 @@ export default function ChatPage() {
         </div>
 
         <ScrollArea className="flex-1">
-          {conversations?.map((conv: any) => (
-            <div
-              key={conv.id}
-              className={`p-4 cursor-pointer hover:bg-accent ${
-                selectedConversation === conv.id ? "bg-accent" : ""
-              }`}
-              onClick={() => setSelectedConversation(conv.id)}
-            >
-              <div className="font-medium">{conv.otherUser?.username}</div>
-            </div>
-          ))}
+          {conversations?.map((conv: any) => {
+            const unreadCount = conv.messages?.filter(
+              (m: any) => m.senderId !== user?.id && !m.read
+            ).length;
+
+            return (
+              <div
+                key={conv.id}
+                className={`p-4 cursor-pointer hover:bg-accent ${
+                  selectedConversation === conv.id ? "bg-accent" : ""
+                }`}
+                onClick={() => setSelectedConversation(conv.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">{conv.otherUser?.username}</div>
+                  {unreadCount > 0 && (
+                    <div className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
+                      {unreadCount}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </ScrollArea>
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${!showSidebar ? 'ml-0' : 'md:ml-0 ml-80'}`}>
         {selectedConversation ? (
           <ChatArea conversationId={selectedConversation} />
         ) : (
