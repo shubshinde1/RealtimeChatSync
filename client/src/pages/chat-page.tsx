@@ -266,12 +266,10 @@ function ChatArea({ conversationId }: { conversationId: number }) {
       sendTypingStatus(conversationId, true);
     }
 
-    // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    // Set new timeout
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
       sendTypingStatus(conversationId, false);
@@ -299,6 +297,29 @@ function ChatArea({ conversationId }: { conversationId: number }) {
 
   return (
     <>
+      {/* Chat Header */}
+      <div className="p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-5 w-5 text-primary" />
+              </div>
+              {otherUser && typingUsers[otherUser.id] && (
+                <div className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-green-500" />
+              )}
+            </div>
+            <div>
+              <h3 className="font-medium">{otherUser?.username}</h3>
+              {otherUser && typingUsers[otherUser.id] && (
+                <p className="text-xs text-muted-foreground">typing...</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {messages?.map((message: any) => (
@@ -320,17 +341,9 @@ function ChatArea({ conversationId }: { conversationId: number }) {
             </div>
           ))}
         </div>
-        {otherUser && typingUsers[otherUser.id] && (
-          <div className="flex justify-start mt-2">
-            <div className="bg-accent px-4 py-2 rounded-lg">
-              <span className="text-sm text-muted-foreground">
-                {otherUser.username} is typing...
-              </span>
-            </div>
-          </div>
-        )}
       </ScrollArea>
 
+      {/* Message Input */}
       <div className="p-4 border-t">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-2">
