@@ -30,6 +30,8 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export const insertMessageSchema = createInsertSchema(messages).pick({
   conversationId: true,
   content: true,
+}).extend({
+  content: z.string().min(1, "Message cannot be empty")
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

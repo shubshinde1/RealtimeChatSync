@@ -44,6 +44,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Check if conversation already exists
+    const existingConversations = await storage.getConversations(req.user!.id);
+    const existingConversation = existingConversations.find(conv => 
+      (conv.user1Id === req.user!.id && conv.user2Id === otherUser.id) ||
+      (conv.user1Id === otherUser.id && conv.user2Id === req.user!.id)
+    );
+
+    if (existingConversation) {
+      const otherUserDetails = await storage.getUser(otherUser.id);
+      return res.json({ ...existingConversation, otherUser: otherUserDetails });
+    }
+
     const conversation = await storage.createConversation(req.user!.id, otherUser.id);
     res.status(201).json({ ...conversation, otherUser });
   });

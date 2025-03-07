@@ -211,7 +211,11 @@ function ChatArea({ conversationId }: { conversationId: number }) {
   };
 
   const onSubmit = async (data: { content: string }) => {
-    await sendMessageMutation.mutate(data);
+    if (!data.content.trim()) {
+      form.setError("content", { message: "Message cannot be empty" });
+      return;
+    }
+    await sendMessageMutation.mutate({ content: data.content.trim() });
     form.reset();
     setIsTyping(false);
     sendTypingStatus(conversationId, false);
@@ -278,12 +282,15 @@ function ChatArea({ conversationId }: { conversationId: number }) {
                       }}
                     />
                   </FormControl>
+                  <div className="text-sm text-destructive">
+                    {form.formState.errors.content?.message}
+                  </div>
                 </FormItem>
               )}
             />
             <Button
               type="submit"
-              disabled={sendMessageMutation.isPending}
+              disabled={sendMessageMutation.isPending || !form.watch("content").trim()}
               size="icon"
             >
               {sendMessageMutation.isPending ? (
