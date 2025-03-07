@@ -47,7 +47,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Check if conversation already exists
     const existingConversations = await storage.getConversations(req.user!.id);
-    const existingConversation = existingConversations.find(conv => 
+    const existingConversation = existingConversations.find(conv =>
       (conv.user1Id === req.user!.id && conv.user2Id === otherUser.id) ||
       (conv.user1Id === otherUser.id && conv.user2Id === req.user!.id)
     );
@@ -74,7 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const result = insertMessageSchema.safeParse({
       conversationId: parseInt(req.params.id),
-      content: req.body.content
+      content: req.body.content,
+      replyToId: req.body.replyToId
     });
 
     if (!result.success) {
@@ -84,7 +85,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const message = await storage.createMessage(
       parseInt(req.params.id),
       req.user!.id,
-      req.body.content
+      req.body.content,
+      req.body.replyToId
     );
 
     res.status(201).json(message);

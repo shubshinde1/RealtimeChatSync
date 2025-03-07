@@ -22,6 +22,7 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   read: boolean("read").default(false).notNull(),
+  replyToId: integer("reply_to_id").references(() => messages.id),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -33,7 +34,8 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   conversationId: true,
   content: true,
 }).extend({
-  content: z.string().min(1, "Message cannot be empty")
+  content: z.string().min(1, "Message cannot be empty"),
+  replyToId: z.number().optional(),
 });
 
 export const updateProfileSchema = z.object({

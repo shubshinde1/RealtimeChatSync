@@ -14,10 +14,11 @@ export interface IStorage {
   getConversations(userId: number): Promise<Conversation[]>;
   createConversation(user1Id: number, user2Id: number): Promise<Conversation>;
   getMessages(conversationId: number): Promise<Message[]>;
-  createMessage(conversationId: number, senderId: number, content: string): Promise<Message>;
+  createMessage(conversationId: number, senderId: number, content: string, replyToId?: number): Promise<Message>;
   sessionStore: session.SessionStore;
   updateMessageReadStatus(messageId: number, read: boolean): Promise<void>;
   markConversationMessagesAsRead(conversationId: number, userId: number): Promise<void>;
+  getMessage(messageId: number): Promise<Message | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -77,7 +78,7 @@ export class MemStorage implements IStorage {
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }
 
-  async createMessage(conversationId: number, senderId: number, content: string): Promise<Message> {
+  async createMessage(conversationId: number, senderId: number, content: string, replyToId?: number): Promise<Message> {
     const id = this.currentMessageId++;
     const message: Message = {
       id,
@@ -86,6 +87,7 @@ export class MemStorage implements IStorage {
       content,
       timestamp: new Date(),
       read: false,
+      replyToId: replyToId || null,
     };
     this.messages.set(id, message);
     return message;
@@ -118,6 +120,10 @@ export class MemStorage implements IStorage {
         this.messages.set(id, { ...message, read: true });
       }
     }
+  }
+
+  async getMessage(messageId: number): Promise<Message | undefined> {
+    return this.messages.get(messageId);
   }
 }
 

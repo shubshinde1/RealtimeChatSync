@@ -9,7 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMessageSchema } from "@shared/schema";
-import { LogOut, Send, Loader2, MessageSquare, UserPlus, User, Menu } from "lucide-react";
+import { LogOut, Send, Loader2, MessageSquare, UserPlus, User, Menu, MessageCircle } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -21,8 +21,9 @@ import {
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { motion, useAnimation, PanInfo } from "framer-motion";
 
-// WebSocket connection setup
+// Modify the WebSocket setup
 function useWebSocket() {
   const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
@@ -33,19 +34,21 @@ function useWebSocket() {
     if (!user) return;
 
     function connect() {
+      console.log('Attempting WebSocket connection...');
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('WebSocket connected, initializing for user:', user.id);
         ws.send(JSON.stringify({ type: 'init', userId: user.id }));
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log('Received WebSocket message:', data);
           switch (data.type) {
             case 'ping':
               console.log('Received ping from server');
@@ -74,7 +77,10 @@ function useWebSocket() {
       };
     }
 
-    connect();
+    // Only connect if we have a valid user
+    if (user.id) {
+      connect();
+    }
 
     return () => {
       if (wsRef.current) {
@@ -87,9 +93,11 @@ function useWebSocket() {
   }, [user]);
 
   const sendTypingStatus = (conversationId: number, isTyping: boolean) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === WebSocket.OPEN && user) {
+      console.log('Sending typing status:', { conversationId, isTyping });
       wsRef.current.send(JSON.stringify({
         type: 'typing',
+        userId: user.id,
         conversationId,
         isTyping
       }));
@@ -235,11 +243,20 @@ export default function ChatPage() {
   );
 }
 
+interface Message {
+  id: number;
+  content: string;
+  senderId: number;
+  replyToId?: number;
+}
+
+
 function ChatArea({ conversationId }: { conversationId: number }) {
   const { user } = useAuth();
   const { typingUsers, sendTypingStatus } = useWebSocket();
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
 
   const { data: messages, isLoading } = useQuery({
     queryKey: [`/api/conversations/${conversationId}/messages`],
@@ -253,11 +270,11 @@ function ChatArea({ conversationId }: { conversationId: number }) {
   const otherUser = currentConversation?.otherUser;
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ content }: { content: string }) => {
+    mutationFn: async ({ content, replyToId }: { content: string; replyToId?: number }) => {
       const res = await apiRequest(
         "POST",
         `/api/conversations/${conversationId}/messages`,
-        { content }
+        { content, replyToId }
       );
       return res.json();
     },
@@ -296,8 +313,14 @@ function ChatArea({ conversationId }: { conversationId: number }) {
       form.setError("content", { message: "Message cannot be empty" });
       return;
     }
-    await sendMessageMutation.mutate({ content: data.content.trim() });
+
+    await sendMessageMutation.mutate({
+      content: data.content.trim(),
+      replyToId: replyTo?.id
+    });
+
     form.reset();
+    setReplyTo(null);
     setIsTyping(false);
     sendTypingStatus(conversationId, false);
   };
@@ -309,6 +332,60 @@ function ChatArea({ conversationId }: { conversationId: number }) {
       </div>
     );
   }
+
+  function ChatMessage({ message, onReply }: { message: Message, onReply: () => void }) {
+    const controls = useAnimation();
+    const isSentByMe = message.senderId === user?.id;
+
+    const handleDragEnd = async (event: any, info: PanInfo) => {
+      const threshold = 100;
+      if (info.offset.x > threshold) {
+        await controls.start({ x: 0 });
+        onReply();
+      } else {
+        await controls.start({ x: 0 });
+      }
+    };
+
+    return (
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 100 }}
+        onDragEnd={handleDragEnd}
+        animate={controls}
+        className={`flex ${isSentByMe ? "justify-end" : "justify-start"}`}
+      >
+        <div
+          className={`max-w-[70%] space-y-1 ${
+            isSentByMe ? "items-end" : "items-start"
+          }`}
+        >
+          {message.replyToId && messages?.find(m => m.id === message.replyToId) && (
+            <div
+              className={`text-xs px-4 py-1 rounded-lg ${
+                isSentByMe
+                  ? "bg-primary/10 text-primary"
+                  : "bg-accent/50 text-accent-foreground"
+              }`}
+            >
+              <MessageCircle className="h-3 w-3 inline-block mr-1" />
+              Replying to: {messages.find(m => m.id === message.replyToId)?.content}
+            </div>
+          )}
+          <div
+            className={`px-4 py-2 rounded-lg ${
+              isSentByMe
+                ? "bg-primary text-primary-foreground"
+                : "bg-accent"
+            }`}
+          >
+            {message.content}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
 
   return (
     <>
@@ -346,28 +423,32 @@ function ChatArea({ conversationId }: { conversationId: number }) {
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
           {messages?.map((message: any) => (
-            <div
+            <ChatMessage
               key={message.id}
-              className={`flex ${
-                message.senderId === user?.id ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div
-                className={`max-w-[70%] px-4 py-2 rounded-lg ${
-                  message.senderId === user?.id
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-accent"
-                }`}
-              >
-                {message.content}
-              </div>
-            </div>
+              message={message}
+              onReply={() => setReplyTo(message)}
+            />
           ))}
         </div>
       </ScrollArea>
 
       {/* Message Input */}
       <div className="p-4 border-t">
+        {replyTo && (
+          <div className="mb-2 p-2 rounded bg-accent/50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <MessageCircle className="h-4 w-4" />
+              <span>Replying to: {replyTo.content}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setReplyTo(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-2">
             <FormField
