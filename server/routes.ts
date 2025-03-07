@@ -1,8 +1,17 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
 import { insertMessageSchema } from "@shared/schema";
+
+type Client = {
+  userId: number;
+  ws: WebSocket;
+  conversationId?: number;
+};
+
+const clients = new Map<number, Client>();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
@@ -10,7 +19,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/conversations", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const conversations = await storage.getConversations(req.user!.id);
-    
+
     // Get user details for each conversation
     const conversationsWithUsers = await Promise.all(
       conversations.map(async (conv) => {
@@ -22,14 +31,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       })
     );
-    
+
     res.json(conversationsWithUsers);
   });
 
   app.post("/api/conversations", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
     const { username } = req.body;
-    
+
     const otherUser = await storage.getUserByUsername(username);
     if (!otherUser) {
       return res.status(404).json({ message: "User not found" });
@@ -47,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/conversations/:id/messages", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    
+
     const result = insertMessageSchema.safeParse({
       conversationId: parseInt(req.params.id),
       content: req.body.content
@@ -62,10 +71,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.user!.id,
       req.body.content
     );
-    
+
     res.status(201).json(message);
   });
 
   const httpServer = createServer(app);
+
+  // Setup WebSocket server
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+
+  wss.on('connection', (ws: WebSocket) => {
+    let userId: number | undefined;
+
+    ws.on('message', (data: string) => {
+      const message = JSON.parse(data);
+
+      switch (message.type) {
+        case 'init':
+          userId = message.userId;
+          clients.set(userId, { userId, ws });
+          break;
+
+        case 'typing':
+          if (!userId) return;
+          const { conversationId, isTyping } = message;
+          const conversation = clients.get(userId);
+          if (conversation) {
+            conversation.conversationId = conversationId;
+          }
+
+          // Notify the other user in the conversation
+          for (const [_, client] of clients) {
+            if (client.conversationId === conversationId && client.userId !== userId) {
+              client.ws.send(JSON.stringify({
+                type: 'typing',
+                userId,
+                isTyping
+              }));
+            }
+          }
+          break;
+      }
+    });
+
+    ws.on('close', () => {
+      if (userId) {
+        clients.delete(userId);
+      }
+    });
+  });
+
   return httpServer;
 }

@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMessageSchema } from "@shared/schema";
 import { LogOut, Send, Loader2, MessageSquare, UserPlus } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,52 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
+
+// WebSocket connection setup
+function useWebSocket() {
+  const { user } = useAuth();
+  const wsRef = useRef<WebSocket | null>(null);
+  const [typingUsers, setTypingUsers] = useState<{ [key: number]: boolean }>({});
+
+  useEffect(() => {
+    if (!user) return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: 'init', userId: user.id }));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'typing') {
+        setTypingUsers(prev => ({
+          ...prev,
+          [data.userId]: data.isTyping
+        }));
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [user]);
+
+  const sendTypingStatus = (conversationId: number, isTyping: boolean) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'typing',
+        conversationId,
+        isTyping
+      }));
+    }
+  };
+
+  return { typingUsers, sendTypingStatus };
+}
 
 export default function ChatPage() {
   const { user, logoutMutation } = useAuth();
@@ -67,7 +113,7 @@ export default function ChatPage() {
             </Button>
           </div>
         </div>
-        
+
         <ScrollArea className="flex-1">
           {conversations?.map((conv: any) => (
             <div
@@ -102,9 +148,20 @@ export default function ChatPage() {
 
 function ChatArea({ conversationId }: { conversationId: number }) {
   const { user } = useAuth();
+  const { typingUsers, sendTypingStatus } = useWebSocket();
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+
   const { data: messages, isLoading } = useQuery({
     queryKey: [`/api/conversations/${conversationId}/messages`],
   });
+
+  const { data: conversations } = useQuery({
+    queryKey: ["/api/conversations"],
+  });
+
+  const currentConversation = conversations?.find((conv: any) => conv.id === conversationId);
+  const otherUser = currentConversation?.otherUser;
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ content }: { content: string }) => {
@@ -129,9 +186,29 @@ function ChatArea({ conversationId }: { conversationId: number }) {
     },
   });
 
+  const handleTyping = () => {
+    if (!isTyping) {
+      setIsTyping(true);
+      sendTypingStatus(conversationId, true);
+    }
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // Set new timeout
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      sendTypingStatus(conversationId, false);
+    }, 1000);
+  };
+
   const onSubmit = async (data: { content: string }) => {
     await sendMessageMutation.mutate(data);
     form.reset();
+    setIsTyping(false);
+    sendTypingStatus(conversationId, false);
   };
 
   if (isLoading) {
@@ -165,6 +242,15 @@ function ChatArea({ conversationId }: { conversationId: number }) {
             </div>
           ))}
         </div>
+        {otherUser && typingUsers[otherUser.id] && (
+          <div className="flex justify-start mt-2">
+            <div className="bg-accent px-4 py-2 rounded-lg">
+              <span className="text-sm text-muted-foreground">
+                {otherUser.username} is typing...
+              </span>
+            </div>
+          </div>
+        )}
       </ScrollArea>
 
       <div className="p-4 border-t">
@@ -180,6 +266,10 @@ function ChatArea({ conversationId }: { conversationId: number }) {
                       placeholder="Type a message..."
                       {...field}
                       disabled={sendMessageMutation.isPending}
+                      onChange={(e) => {
+                        field.onChange(e);
+                        handleTyping();
+                      }}
                     />
                   </FormControl>
                 </FormItem>
