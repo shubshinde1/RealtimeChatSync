@@ -190,7 +190,22 @@ export default function ChatPage() {
                 onClick={() => setSelectedConversation(conv.id)}
               >
                 <div className="flex items-center justify-between">
-                  <div className="font-medium">{conv.otherUser?.username}</div>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                        {conv.otherUser?.profilePicture ? (
+                          <img
+                            src={conv.otherUser.profilePicture}
+                            alt={conv.otherUser.username}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <User className="h-5 w-5 text-primary" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="font-medium">{conv.otherUser?.username}</div>
+                  </div>
                   {unreadCount > 0 && (
                     <div className="bg-primary text-primary-foreground rounded-full px-2 py-0.5 text-xs">
                       {unreadCount}
@@ -302,8 +317,16 @@ function ChatArea({ conversationId }: { conversationId: number }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center">
-                <User className="h-5 w-5 text-primary" />
+              <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+                {otherUser?.profilePicture ? (
+                  <img
+                    src={otherUser.profilePicture}
+                    alt={otherUser.username}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <User className="h-5 w-5 text-primary" />
+                )}
               </div>
               {otherUser && typingUsers[otherUser.id] && (
                 <div className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-green-500" />

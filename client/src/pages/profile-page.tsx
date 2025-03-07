@@ -8,8 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { apiRequest } from "@/lib/queryClient";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Loader2, ArrowLeft, Upload, Trash2, User } from "lucide-react";
 import { Link } from "wouter";
 
 const passwordChangeSchema = z.object({
@@ -21,16 +21,27 @@ const passwordChangeSchema = z.object({
   path: ["confirmPassword"],
 });
 
+const profilePictureSchema = z.object({
+  profilePicture: z.string().url("Please enter a valid image URL"),
+});
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const form = useForm({
+  const passwordForm = useForm({
     resolver: zodResolver(passwordChangeSchema),
     defaultValues: {
       currentPassword: "",
       newPassword: "",
       confirmPassword: "",
+    },
+  });
+
+  const profilePictureForm = useForm({
+    resolver: zodResolver(profilePictureSchema),
+    defaultValues: {
+      profilePicture: user?.profilePicture || "",
     },
   });
 
@@ -46,11 +57,54 @@ export default function ProfilePage() {
         title: "Password updated",
         description: "Your password has been changed successfully.",
       });
-      form.reset();
+      passwordForm.reset();
     },
     onError: (error: Error) => {
       toast({
         title: "Failed to update password",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const profilePictureMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof profilePictureSchema>) => {
+      const res = await apiRequest("POST", "/api/user/profile-picture", data);
+      return res.json();
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
+      toast({
+        title: "Profile picture updated",
+        description: "Your profile picture has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update profile picture",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProfilePictureMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/user/profile-picture");
+      return res.json();
+    },
+    onSuccess: (user) => {
+      queryClient.setQueryData(["/api/user"], user);
+      profilePictureForm.reset({ profilePicture: "" });
+      toast({
+        title: "Profile picture removed",
+        description: "Your profile picture has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to remove profile picture",
         description: error.message,
         variant: "destructive",
       });
@@ -70,6 +124,71 @@ export default function ProfilePage() {
             <CardTitle>Profile Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Profile Picture Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Profile Picture</h3>
+              <div className="flex justify-center mb-4">
+                <div className="relative h-24 w-24 rounded-full overflow-hidden bg-primary/10">
+                  {user?.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt="Profile"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <User className="h-12 w-12 text-primary" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Form {...profilePictureForm}>
+                <form onSubmit={profilePictureForm.handleSubmit((data) => profilePictureMutation.mutate(data))} className="space-y-4">
+                  <FormField
+                    control={profilePictureForm.control}
+                    name="profilePicture"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Profile Picture URL</FormLabel>
+                        <FormControl>
+                          <div className="flex gap-2">
+                            <Input {...field} placeholder="Enter image URL" />
+                            <Button
+                              type="submit"
+                              size="icon"
+                              disabled={profilePictureMutation.isPending}
+                            >
+                              {profilePictureMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {user?.profilePicture && (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                disabled={deleteProfilePictureMutation.isPending}
+                                onClick={() => deleteProfilePictureMutation.mutate()}
+                              >
+                                {deleteProfilePictureMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </form>
+              </Form>
+            </div>
+
             {/* User Info */}
             <div className="space-y-2">
               <h3 className="text-lg font-medium">Account Information</h3>
@@ -82,10 +201,10 @@ export default function ProfilePage() {
             {/* Password Change Form */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium">Change Password</h3>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit((data) => passwordChangeMutation.mutate(data))} className="space-y-4">
+              <Form {...passwordForm}>
+                <form onSubmit={passwordForm.handleSubmit((data) => passwordChangeMutation.mutate(data))} className="space-y-4">
                   <FormField
-                    control={form.control}
+                    control={passwordForm.control}
                     name="currentPassword"
                     render={({ field }) => (
                       <FormItem>
@@ -99,7 +218,7 @@ export default function ProfilePage() {
                   />
 
                   <FormField
-                    control={form.control}
+                    control={passwordForm.control}
                     name="newPassword"
                     render={({ field }) => (
                       <FormItem>
@@ -113,7 +232,7 @@ export default function ProfilePage() {
                   />
 
                   <FormField
-                    control={form.control}
+                    control={passwordForm.control}
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem>

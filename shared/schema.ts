@@ -6,6 +6,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  profilePicture: text("profile_picture"),
 });
 
 export const conversations = pgTable("conversations", {
@@ -33,6 +34,10 @@ export const insertMessageSchema = createInsertSchema(messages).pick({
   content: true,
 }).extend({
   content: z.string().min(1, "Message cannot be empty")
+});
+
+export const updateProfileSchema = z.object({
+  profilePicture: z.string().url("Invalid URL").optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

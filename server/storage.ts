@@ -10,6 +10,7 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
+  updateUserProfilePicture(userId: number, profilePicture: string | null): Promise<void>;
   getConversations(userId: number): Promise<Conversation[]>;
   createConversation(user1Id: number, user2Id: number): Promise<Conversation>;
   getMessages(conversationId: number): Promise<Message[]>;
@@ -52,7 +53,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    const user: User = { ...insertUser, id };
+    const user: User = { ...insertUser, id, profilePicture: null };
     this.users.set(id, user);
     return user;
   }
@@ -94,6 +95,13 @@ export class MemStorage implements IStorage {
     const user = this.users.get(userId);
     if (user) {
       this.users.set(userId, { ...user, password: hashedPassword });
+    }
+  }
+
+  async updateUserProfilePicture(userId: number, profilePicture: string | null): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, { ...user, profilePicture });
     }
   }
 

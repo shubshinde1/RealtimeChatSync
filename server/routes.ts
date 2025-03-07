@@ -104,6 +104,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendStatus(200);
   });
 
+  // Add this new route after the existing user-related routes
+  app.post("/api/user/profile-picture", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const { profilePicture } = req.body;
+    await storage.updateUserProfilePicture(req.user!.id, profilePicture);
+
+    const updatedUser = await storage.getUser(req.user!.id);
+    res.json(updatedUser);
+  });
+
+  app.delete("/api/user/profile-picture", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    await storage.updateUserProfilePicture(req.user!.id, null);
+
+    const updatedUser = await storage.getUser(req.user!.id);
+    res.json(updatedUser);
+  });
+
   const httpServer = createServer(app);
 
   // Setup WebSocket server
