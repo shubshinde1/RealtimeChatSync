@@ -75,6 +75,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(message);
   });
 
+  app.post("/api/user/change-password", async (req, res) => {
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+
+    const { currentPassword, newPassword } = req.body;
+    const user = await storage.getUser(req.user!.id);
+
+    if (!user || !(await comparePasswords(currentPassword, user.password))) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    await storage.updateUserPassword(user.id, await hashPassword(newPassword));
+    res.sendStatus(200);
+  });
+
   const httpServer = createServer(app);
 
   // Setup WebSocket server

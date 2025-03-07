@@ -9,7 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertMessageSchema } from "@shared/schema";
-import { LogOut, Send, Loader2, MessageSquare, UserPlus } from "lucide-react";
+import { LogOut, Send, Loader2, MessageSquare, UserPlus, User } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
+import { Link } from "wouter";
 
 // WebSocket connection setup
 function useWebSocket() {
@@ -104,6 +105,11 @@ export default function ChatPage() {
           <h2 className="font-semibold">Conversations</h2>
           <div className="flex gap-2">
             <NewConversationDialog />
+            <Link href="/profile">
+              <Button variant="ghost" size="icon" title="Profile Settings">
+                <User className="h-4 w-4" />
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               size="icon"
