@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import { storage } from "./storage";
 import { insertMessageSchema } from "@shared/schema";
+import { parse } from "url";
 
 type Client = {
   userId: number;
@@ -108,47 +109,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup WebSocket server
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, req) => {
     let userId: number | undefined;
+    console.log('New WebSocket connection attempt');
 
     ws.on('message', (data: string) => {
-      const message = JSON.parse(data);
+      try {
+        const message = JSON.parse(data);
+        console.log('Received WebSocket message:', message.type);
 
-      switch (message.type) {
-        case 'init':
-          userId = message.userId;
-          if (userId) {
-            clients.set(userId, { userId, ws });
-          }
-          break;
-
-        case 'typing':
-          if (!userId) return;
-          const { conversationId, isTyping } = message;
-          const conversation = clients.get(userId);
-          if (conversation) {
-            conversation.conversationId = conversationId;
-          }
-
-          // Notify the other user in the conversation
-          for (const client of clients.values()) {
-            if (client.conversationId === conversationId && client.userId !== userId) {
-              client.ws.send(JSON.stringify({
-                type: 'typing',
-                userId,
-                isTyping
-              }));
+        switch (message.type) {
+          case 'init':
+            userId = message.userId;
+            if (userId) {
+              console.log(`Initializing WebSocket for user ${userId}`);
+              // Remove any existing connection for this user
+              const existingClient = clients.get(userId);
+              if (existingClient) {
+                existingClient.ws.close();
+                clients.delete(userId);
+              }
+              clients.set(userId, { userId, ws });
+              console.log(`WebSocket connection established for user ${userId}`);
             }
-          }
-          break;
+            break;
+
+          case 'typing':
+            if (!userId) {
+              console.log('Typing event received but no userId set');
+              return;
+            }
+            const { conversationId, isTyping } = message;
+            const conversation = clients.get(userId);
+            if (conversation) {
+              conversation.conversationId = conversationId;
+            }
+
+            // Notify the other user in the conversation
+            for (const client of clients.values()) {
+              if (client.conversationId === conversationId && client.userId !== userId) {
+                client.ws.send(JSON.stringify({
+                  type: 'typing',
+                  userId,
+                  isTyping
+                }));
+              }
+            }
+            break;
+        }
+      } catch (err) {
+        console.error('WebSocket message error:', err);
       }
     });
 
     ws.on('close', () => {
       if (userId) {
+        console.log(`WebSocket connection closed for user ${userId}`);
         clients.delete(userId);
       }
     });
+
+    // Send an initial ping to establish connection
+    ws.send(JSON.stringify({ type: 'ping' }));
   });
 
   return httpServer;

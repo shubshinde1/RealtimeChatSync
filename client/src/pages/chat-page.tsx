@@ -20,37 +20,69 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Link } from "wouter";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // WebSocket connection setup
 function useWebSocket() {
   const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const [typingUsers, setTypingUsers] = useState<{ [key: number]: boolean }>({});
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (!user) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    function connect() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'init', userId: user.id }));
-    };
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        ws.send(JSON.stringify({ type: 'init', userId: user.id }));
+      };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'typing') {
-        setTypingUsers(prev => ({
-          ...prev,
-          [data.userId]: data.isTyping
-        }));
-      }
-    };
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          switch (data.type) {
+            case 'ping':
+              console.log('Received ping from server');
+              break;
+            case 'typing':
+              setTypingUsers(prev => ({
+                ...prev,
+                [data.userId]: data.isTyping
+              }));
+              break;
+          }
+        } catch (err) {
+          console.error('Error processing WebSocket message:', err);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected, attempting to reconnect...');
+        wsRef.current = null;
+        // Attempt to reconnect after 3 seconds
+        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
 
     return () => {
-      ws.close();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
     };
   }, [user]);
 
@@ -118,7 +150,7 @@ export default function ChatPage() {
       </Button>
 
       {/* Sidebar */}
-      <div 
+      <div
         className={`${
           showSidebar ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0 transition-transform duration-200 fixed md:relative z-40 w-80 h-full bg-background border-r flex flex-col`}
@@ -132,6 +164,7 @@ export default function ChatPage() {
                 <User className="h-4 w-4" />
               </Button>
             </Link>
+            <ThemeToggle />
             <Button
               variant="ghost"
               size="icon"
