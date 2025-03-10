@@ -53,7 +53,8 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  const port = process.env.PORT || 3000;
+  // ALWAYS serve the app on port 5000
+  const port = 5000;
   const host = process.env.HOST || 'localhost';
 
   try {
