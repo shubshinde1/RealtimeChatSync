@@ -37,6 +37,10 @@ Create a `.env` file in the root directory with the following variables:
 # Development environment
 NODE_ENV=development
 
+# Server configuration
+PORT=3000
+HOST=localhost
+
 # Session secret (change this to a secure random string)
 SESSION_SECRET=your_secure_secret_here
 ```
@@ -46,7 +50,7 @@ SESSION_SECRET=your_secure_secret_here
 npm run dev
 ```
 
-The application will be available at `http://localhost:5000`
+The application will be available at `http://localhost:3000`
 
 ## Development
 
